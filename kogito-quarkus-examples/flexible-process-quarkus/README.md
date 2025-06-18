@@ -123,27 +123,40 @@ Given the following support case:
 Create a POST request to the service desk endpoint.
 
 ```{bash}
-curl -D -H 'Content-Type:application/json' -H 'Accept:application/json' -d @docs/requests/newTicket.json http://localhost:8080/serviceDesk
+
+curl -X 'POST' \
+  'http://localhost:8080/serviceDesk' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "supportCase": {
+    "customer": "Paco the customer",
+    "description": "Kogito is not working for some reason.",
+    "product": {
+      "family": "Middleware",
+      "name": "Kogito"
+    }
+  }
+}'
 ```
 
 Expect a response containing the ticket id and the current status of the process data where the engineer is assigned and the state is `WAITING_FOR_OWNER`. Note that also a Location HTTP Header
 is present:
 
 ```{bash}
-HTTP/1.1 201 Created
-Content-Length: 303
-Content-Type: application/json
-Location: http://localhost:8080/serviceDesk/de42a39a-2711-4d23-a890-aad24fb8e924
+ content-length: 303 
+ content-type: application/json 
+ location: http://localhost:8080/serviceDesk/98b6a1ab-3f94-409f-aa0d-718e9d8ec1be 
 
 {
-  "id": "de42a39a-2711-4d23-a890-aad24fb8e924",
+  "id": "98b6a1ab-3f94-409f-aa0d-718e9d8ec1be",
   "supportCase": {
     "product": {
       "name": "Kogito",
       "family": "Middleware"
     },
     "description": "Kogito is not working for some reason.",
-    "engineer": "kelly",
+    "engineer": "ken",
     "customer": "Paco the customer",
     "state": "WAITING_FOR_OWNER",
     "comments": null,
@@ -151,9 +164,8 @@ Location: http://localhost:8080/serviceDesk/de42a39a-2711-4d23-a890-aad24fb8e924
   },
   "supportGroup": "Kogito"
 }
-```
 
-### Add a support comment
+```
 
 As this is a flexible process, it is up to the customer or the engineer to decide when the case is `RESOLVED`. Both ends can add comments
 and each time a comment is added the state will be updated as waiting for the other party.
@@ -163,165 +175,340 @@ There are no pre-existing tasks for adding comments but an endpoint is available
 For that an empty post should be sent to `/serviceDesk/ReceiveSupportComment`. Note the extra flag to retreive the response headers.
 
 ```{bash}
-$ curl -D - -XPOST -H 'Content-Type:application/json' -H 'Accept:application/json' http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/ReceiveSupportComment
+curl -X 'POST' \
+  'http://localhost:8080/serviceDesk/fd9895ce-0322-4557-a904-11a0d114604a/ReceiveSupportComment/trigger?group=support&user=kelly' \
+  -H 'accept: */*' \
+  -d ''
 
-HTTP/1.1 201 Created
-Content-Length: 303
-Content-Type: application/json
-Location: http://localhost:8080/serviceDesk/de42a39a-2711-4d23-a890-aad24fb8e924/ReceiveSupportComment/36e69fa2-2e5a-4ac5-9115-b326499ff877
-
-{"id":"de42a39a-2711-4d23-a890-aad24fb8e924","supportCase":{"product":{"name":"Kogito","family":"Middleware"},"description":"Kogito is not working for some reason.","engineer":"kelly","customer":"Paco the customer","state":"WAITING_FOR_OWNER","comments":null,"questionnaire":null},"supportGroup":"Kogito"}
 ```
 
-The response returns an HTTP Location header with the endpoint of the generated task.
+The empty response returns an HTTP Location header with the endpoint of the generated task. In below sample taskId is `f4cc8947-6eb6-45bd-b091-052598af9761`
+
+```{bash}
+Response body
+{}
+
+
+Response headers
+
+content-length: 2 
+ content-type: application/json 
+ location: http://localhost:8080/serviceDesk/fd9895ce-0322-4557-a904-11a0d114604a/ReceiveSupportComment/trigger/f4cc8947-6eb6-45bd-b091-052598af9761 
+
+```
 
 Use this path to create the comment. It is important to have in mind the user and group query parameters that provide information about the user performing the task and the group he/she belongs to because
 this task is restricted to the _support_ group
 
-```{bash}
-curl -H 'Content-Type:application/json' -H 'Accept:application/json' -d @docs/requests/supportComment.json http://localhost:8080/serviceDesk/de42a39a-2711-4d23-a890-aad24fb8e924/ReceiveSupportComment/36e69fa2-2e5a-4ac5-9115-b326499ff877?user=kelly&group=support
-```
+### Retrieve Assigned Tasks
 
-And the data containing the comment and the updated state will be returned:
-
-```{json}
-{
-  "id": "de42a39a-2711-4d23-a890-aad24fb8e924",
-  "supportCase": {
-    "product": {
-      "name": "Kogito",
-      "family": "Middleware"
-    },
-    "description": "Kogito is not working for some reason.",
-    "engineer": "kelly",
-    "customer": "Paco the customer",
-    "state": "WAITING_FOR_CUSTOMER",
-    "comments": [
-      {
-        "author": "kelly",
-        "date": 1594034179.628926,
-        "text": "Have you tried to switch it off and on again?"
-      }
-    ],
-    "questionnaire": null
-  },
-  "supportGroup": "Kogito"
-}
-```
-
-### Add a customer comment
-
-Now it's time for the customer to reply to the engineer's comment. For that an empty post should be sent to
-`/serviceDesk/ReceiveCustomerComment`. Note the extra flag to retreive the response headers.
+To fetch the list of tasks assigned to a user, execute the following curl command:
+This command queries the Kogito runtime for user tasks assigned to the user _kelly_ within the support group. The response will include details about each task, such as its ID, name, status, and assigned user.
 
 ```{bash}
-$ curl -D - -XPOST -H 'Content-Type:application/json' -H 'Accept:application/json' http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/ReceiveCustomerComment
+curl -X 'GET' \
+  'http://localhost:8080/usertasks/instance?group=support&user=kelly' \
+  -H 'accept: application/json'
 
-HTTP/1.1 201 Created
-Content-Length: 305
-Content-Type: application/json
-Location: http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/ReceiveSupportComment/1ac85d3c-c02c-11ea-b3de-0242ac130004
+  ```
 
-{"id":"b3c75b24-2691-4a76-902c-c9bc29ea076c","supportCase":{"product":{"name":"Kogito","family":"Middleware"},"description":"Kogito is not working for some reason.","engineer":"kelly","customer":"Paco the customer","state":"WAITING_FOR_CUSTOMER","comments":null,"questionnaire":null},"supportGroup":"Kogito"}
-```
-
-Similar to the previous operation, the Location HTTP header contains the reference to the task.
-
-Use this path to create the comment. It is important to have in mind the user and group query parameters that provide information about the user performing the task and the group he/she belongs to because
-this task is restricted to the _customer_ group
+Sample Response list the tasks and its details:
 
 ```{bash}
-curl -H 'Content-Type:application/json' -H 'Accept:application/json' -d @docs/requests/customerComment.json http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/ReceiveCustomerComment/1ac85d3c-c02c-11ea-b3de-0242ac130004?user=Paco&group=customer
-```
-
-And the data containing the comment and the updated state will be returned:
-
-```{json}
-{
-  "id": "b3c75b24-2691-4a76-902c-c9bc29ea076c",
-  "supportCase": {
-    "product": {
-      "name": "Kogito",
-      "family": "Middleware"
-    },
-    "description": "Kogito is not working for some reason.",
-    "engineer": "kelly",
-    "customer": "Paco the customer",
-    "state": "WAITING_FOR_OWNER",
-    "comments": [
-      {
-        "author": "kelly",
-        "date": 1594034179.628926,
-        "text": "Have you tried to switch it off and on again?"
-      },
-      {
-        "author": "Paco",
-        "date": 1594034179.628926,
-        "text": "Great idea!"
-      }
-    ],
-    "questionnaire": null
-  },
-  "supportGroup": "Kogito"
-}
-```
-
-### Resolving the case
-
-In this case, the customer is happy with the provided resolution and will proceed to set the case as `RESOLVED`.
-
-```{bash}
-curl -XPOST -H 'Content-Type:application/json' -H 'Accept:application/json' http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/Resolve_Case
-```
-
-Check the response where the state is now set as `RESOLVED`.
-
-```{json}
-{
-  "id": "b3c75b24-2691-4a76-902c-c9bc29ea076c",
-  "supportCase": {
-    "product": {
-      "name": "Kogito",
-      "family": "Middleware"
-    },
-    "description": "Kogito is not working for some reason.",
-    "engineer": "kelly",
-    "customer": "Paco the customer",
-    "state": "RESOLVED",
-    "comments": [
-      {
-        "author": "kelly",
-        "date": 1594034179.628926,
-        "text": "Support: Have you tried to switch it off and on again?"
-      },
-      {
-        "author": "Paco",
-        "date": 1594034179.628926,
-        "text": "Great idea!"
-      }
-    ],
-    "questionnaire": null
-  },
-  "supportGroup": "Kogito"
-}
-```
-
-### Questionnaire
-
-There is a milestone waiting for a CaseResolved event. When received a Questionnaire task is
-created and assigned to the `customer` group.
-
-In order to know the task instance id, the `tasks` endpoint must be queried.
-
-```{bash}
-$ curl -H 'Content-Type:application/json' -H 'Accept:application/json' http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/tasks
 [
-  {"id:"2cd185b6-d6db-4984-a0ae-9dc4fa15cb6d", "name": "Questionnaire"}
+{
+    "id": "4ebf22b0-21e0-4d87-9b57-52056a558e6f",
+    "userTaskId": "_C5983E55-DC49-4839-AC3E-3E8344A29262",
+    "status": {
+        "terminate": null,
+        "name": "Ready"
+    },
+    "taskName": "ReceiveSupportComment",
+    "taskDescription": null,
+    "taskPriority": null,
+    "potentialUsers": [],
+    "potentialGroups": [
+        "support"
+    ],
+    "adminUsers": [],
+    "adminGroups": [],
+    "excludedUsers": [],
+    "externalReferenceId": "f4cc8947-6eb6-45bd-b091-052598af9761",
+    "actualOwner": null,
+    "inputs": {
+        "supportCase": {
+            "product": {
+                "name": "Kogito",
+                "family": "Middleware"
+            },
+            "description": "Kogito is not working for some reason.",
+            "engineer": "kelly",
+            "customer": "Paco the customer",
+            "state": "WAITING_FOR_OWNER",
+            "comments": null,
+            "questionnaire": null
+        },
+        "supportGroup": "Kogito"
+    },
+    "outputs": {},
+    "metadata": {
+        "ProcessType": "BPMN",
+        "ParentProcessInstanceId": null,
+        "ProcessVersion": "1.0",
+        "RootProcessInstanceId": null,
+        "RootProcessId": null,
+        "NodeInstanceId": "e0fa3297-69f7-4e92-9066-211e2013b189",
+        "ProcessId": "serviceDesk",
+        "ProcessInstanceId": "fd9895ce-0322-4557-a904-11a0d114604a",
+        "ProcessInstanceState": 1
+    }
+}
+]
+```
+### Claim the Task
+
+Once you have the task Id from the previous step, user can claim the task by transitioning it to the "Claim" phase. 
+Using the following curl command:
+
+```{bash}
+
+curl -X 'POST' \
+  'http://localhost:8080/usertasks/instance/4ebf22b0-21e0-4d87-9b57-52056a558e6f/transition?group=support&user=kelly' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "transitionId": "claim",
+  "data": {
+  }
+}'
+
+```
+Sample Response:
+
+```{bash}
+{
+  "id": "4ebf22b0-21e0-4d87-9b57-52056a558e6f",
+  "userTaskId": "_C5983E55-DC49-4839-AC3E-3E8344A29262",
+  "status": {
+    
+  },
+  "taskName": "ReceiveSupportComment",
+  "taskDescription": null,
+  "taskPriority": null,
+  "potentialUsers": [],
+  "potentialGroups": [
+    "support"
+  ],
+  "adminUsers": [],
+  "adminGroups": [],
+  "excludedUsers": [],
+  "externalReferenceId": "f4cc8947-6eb6-45bd-b091-052598af9761",
+  "actualOwner": "kelly",
+  "inputs": {
+    "supportCase": {
+      "product": {
+        "name": "Kogito",
+        "family": "Middleware"
+      },
+      "description": "Kogito is not working for some reason.",
+      "engineer": "kelly",
+      "customer": "Paco the customer",
+      "state": "WAITING_FOR_OWNER",
+      "comments": null,
+      "questionnaire": null
+    },
+    "supportGroup": "Kogito"
+  },
+  "outputs": {
+    "comment": ""
+  },
+  "metadata": {
+    "ProcessType": "BPMN",
+    "ParentProcessInstanceId": null,
+    "ProcessVersion": "1.0",
+    "RootProcessInstanceId": null,
+    "RootProcessId": null,
+    "NodeInstanceId": "e0fa3297-69f7-4e92-9066-211e2013b189",
+    "ProcessId": "serviceDesk",
+    "ProcessInstanceId": "fd9895ce-0322-4557-a904-11a0d114604a",
+    "ProcessInstanceState": 1
+  }
+}
+```
+
+### Add Output Comments
+
+To add comments to the task, use the following curl command:
+```{bash}
+
+curl -X 'PUT' \
+  'http://localhost:8080/usertasks/instance/4ebf22b0-21e0-4d87-9b57-52056a558e6f/outputs?group=support&user=kelly' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{"comment":"Task completed."}'
+
+  ```
+
+  Sample Response
+
+```{bash}
+  {
+  "id": "4ebf22b0-21e0-4d87-9b57-52056a558e6f",
+  "userTaskId": "_C5983E55-DC49-4839-AC3E-3E8344A29262",
+  "status": {
+    "terminate": null,
+    "name": "Ready"
+  },
+  "taskName": "ReceiveSupportComment",
+  "taskDescription": null,
+  "taskPriority": null,
+  "potentialUsers": [],
+  "potentialGroups": [
+    "support"
+  ],
+  "adminUsers": [],
+  "adminGroups": [],
+  "excludedUsers": [],
+  "externalReferenceId": "f4cc8947-6eb6-45bd-b091-052598af9761",
+  "actualOwner": null,
+  "inputs": {
+    "supportCase": {
+      "product": {
+        "name": "Kogito",
+        "family": "Middleware"
+      },
+      "description": "Kogito is not working for some reason.",
+      "engineer": "kelly",
+      "customer": "Paco the customer",
+      "state": "WAITING_FOR_OWNER",
+      "comments": null,
+      "questionnaire": null
+    },
+    "supportGroup": "Kogito"
+  },
+  "outputs": {
+    "comment": "Task completed."
+  },
+  "metadata": {
+    "ProcessType": "BPMN",
+    "ParentProcessInstanceId": null,
+    "ProcessVersion": "1.0",
+    "RootProcessInstanceId": null,
+    "RootProcessId": null,
+    "NodeInstanceId": "e0fa3297-69f7-4e92-9066-211e2013b189",
+    "ProcessId": "serviceDesk",
+    "ProcessInstanceId": "fd9895ce-0322-4557-a904-11a0d114604a",
+    "ProcessInstanceState": 1
+  }
+}
+```
+### Complete the Task
+
+To mark the task as completed, use the following curl command:
+
+```{bash}
+
+curl -X 'POST' \
+  'http://localhost:8080/usertasks/instance/4ebf22b0-21e0-4d87-9b57-52056a558e6f/transition?group=support&user=kelly' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "transitionId": "complete",
+  "data": {
+  }
+}'
+
+```
+Sample Response
+
+```{bash}
+{
+  "id": "4ebf22b0-21e0-4d87-9b57-52056a558e6f",
+  "userTaskId": "_C5983E55-DC49-4839-AC3E-3E8344A29262",
+  "status": {
+    "terminate": "COMPLETED",
+    "name": "Completed"
+  },
+  "taskName": "ReceiveSupportComment",
+  "taskDescription": null,
+  "taskPriority": null,
+  "potentialUsers": [],
+  "potentialGroups": [
+    "support"
+  ],
+  "adminUsers": [],
+  "adminGroups": [],
+  "excludedUsers": [],
+  "externalReferenceId": "f4cc8947-6eb6-45bd-b091-052598af9761",
+  "actualOwner": "kelly",
+  "inputs": {
+    "supportCase": {
+      "product": {
+        "name": "Kogito",
+        "family": "Middleware"
+      },
+      "description": "Kogito is not working for some reason.",
+      "engineer": "kelly",
+      "customer": "Paco the customer",
+      "state": "WAITING_FOR_OWNER",
+      "comments": null,
+      "questionnaire": null
+    },
+    "supportGroup": "Kogito"
+  },
+  "outputs": {
+    "comment": "Task completed."
+  },
+  "metadata": {
+    "ProcessType": "BPMN",
+    "ParentProcessInstanceId": null,
+    "ProcessVersion": "1.0",
+    "RootProcessInstanceId": null,
+    "RootProcessId": null,
+    "NodeInstanceId": "e0fa3297-69f7-4e92-9066-211e2013b189",
+    "ProcessId": "serviceDesk",
+    "ProcessInstanceId": "fd9895ce-0322-4557-a904-11a0d114604a",
+    "ProcessInstanceState": 1
+  }
+} 
+```
+### Verify Task Status
+
+To verify the status of the task, use the following curl command:
+
+```{bash}
+
+curl -X 'GET' \
+  'http://localhost:8080/serviceDesk' \
+  -H 'accept: application/json'
+
+```
+Checking the status of the task displays the below results
+
+```{bash}
+[
+  {
+    "id": "fd9895ce-0322-4557-a904-11a0d114604a",
+    "supportCase": {
+      "product": {
+        "name": "Kogito",
+        "family": "Middleware"
+      },
+      "description": "Kogito is not working for some reason.",
+      "engineer": "kelly",
+      "customer": "Paco the customer",
+      "state": "WAITING_FOR_CUSTOMER",
+      "comments": [
+        {
+          "author": "kelly",
+          "date": "2025-06-18T14:55:23.685957+05:30",
+          "text": "Task completed."
+        }
+      ],
+      "questionnaire": null
+    },
+    "supportGroup": "Kogito"
+  }
 ]
 ```
 
-Use this id in the path:
-
-```{bash}
-curl -XPOST -H 'Content-Type:application/json' -H 'Accept:application/json' -d @docs/requests/questionnaire.json http://localhost:8080/serviceDesk/b3c75b24-2691-4a76-902c-c9bc29ea076c/Questionnaire/2cd185b6-d6db-4984-a0ae-9dc4fa15cb6d?user=Paco&group=customer
-```
